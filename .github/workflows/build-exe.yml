@@ -1,0 +1,64 @@
+name: Build EXE
+
+# Buduje pojedynczy plik .exe (bez instalacji) na runnerze Windows.
+# Uruchomienie: Actions -> Build EXE -> Run workflow, albo tag v*.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Windows EXE
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Pobierz repozytorium
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Zaleznosci
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+
+      - name: Sprawdz skladnie
+        run: python -m py_compile app.py
+
+      - name: Zbuduj EXE
+        run: |
+          pyinstaller --onefile --windowed --name "RAM-Plus" --clean --noconfirm app.py
+
+      - name: Sprawdz, ze plik powstal
+        run: |
+          if (-not (Test-Path "dist\RAM-Plus.exe")) {
+            Write-Error "Nie znaleziono dist\RAM-Plus.exe"
+            Get-ChildItem -Recurse dist
+            exit 1
+          }
+          Get-Item "dist\RAM-Plus.exe" | Format-List Name,Length
+        shell: pwsh
+
+      - name: Wyslij EXE jako artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: ram-plus-exe
+          path: dist/RAM-Plus.exe
+          retention-days: 90
+
+      - name: Dodaj EXE do Release (tylko dla tagu)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/RAM-Plus.exe
+          generate_release_notes: true
